@@ -23,6 +23,83 @@ static struct {
 	int locking;
 } cons;
 
+static int search_active_flag = 0; //flag da li je aktivan search bafer
+static char search_buf[81];//bafer sa karakterima koje trazimo
+static int search_len = 0;//duzina niza koji trazimo
+static unsigned short screen_backup[80];//cuvanje sadrzaja poslednjeg reda
+static int current_match = 0;// broj po redu koji gledamo od onih koji su selektovani
+
+static int char_lower(int c) {
+	if (c >= 'A' && c <= 'Z') return c + ('a' - 'A');
+	return c;
+}
+
+static void refresh_search(void) {
+	int i, j, found_count = 0;
+	unsigned short *crt = (unsigned short*) P2V(0xb8000); // pointer za video memoriju
+
+	for(i = 0; i < 24 * 80; i++){
+		if(search_active_flag)
+			crt[i] = (crt[i] & 0xff) | 0xF000; //pozadina bela za aktivan
+		else
+			crt[i] = (crt[i] & 0xff) | 0x0700; // normalna crna pozadina
+	}
+
+	if(search_len == 0 || !search_active_flag) return;
+
+	for(i = 0; i < 24 * 80; i++){
+		int match = 1;
+
+		for(j = 0;j < search_len; j++){ //petlja prolazi i gleda da li se karakteri poklapaju sa search baferom (da li je pronadjen niz slova koji treba da se selektuje bojom)
+			if(i+j >= 24 * 80 || char_lower(crt[i+j] & 0xff) != char_lower(search_buf[j])){
+				match = 0;
+				break;
+			}
+		}
+
+
+	if(match) {
+		unsigned short color = (found_count == current_match) ? 0x2F00 : 0x5F00; // menja boju za selektovanu pronadjenu rec
+			for(j = 0; j < search_len; j++)
+				crt[i+j] = (crt[i+j] & 0xff) | color;
+		found_count++;
+
+		}
+	}
+	if (found_count > 0) { // kruzna navigacija
+		if (current_match >= found_count) current_match = 0;
+		if (current_match < 0) current_match = found_count - 1;
+	} else {
+		current_match = 0;
+	}
+}
+
+static void toggle_search(void){
+	int i;
+	unsigned short *crt = (unsigned short*)P2V(0xb8000); //Uzima posledju liniju i cuva je da bi se kasnije vratila pri izlasku iz search moda
+
+	if(!search_active_flag){
+		search_active_flag = 1;
+
+		for(i = 0; i< 80; i++) screen_backup[i] = crt[24*80 + i]; //pamti poslednju liniju da bi se vratila nakon search-a
+
+		char *prompt = "Search: "; //pamti adrese Search i sta je tu ostalo ukucano
+		for(i = 0; i < 8; i++) crt[24*80 + i] = (prompt[i] & 0xff) | 0x0A00; // ispisuje dole Search:
+
+		for(i = 0; i < search_len; i++)
+			crt[24*80 + 8 + i] = (search_buf[i] & 0xff) | 0x0800; //ispisuje ostatak zapamcenog teksta ako postoji u search
+
+		refresh_search();
+	} else {
+		search_active_flag = 0;
+
+		for(i = 0; i < 80; i++) crt[24*80 + i] = screen_backup[i]; // ova linija vraca backup nazad nakon searcha
+		refresh_search();
+
+	}
+
+}
+
 // Print to the console. only understands %d, %x, %p, %s.
 void
 cprintf(char *fmt, ...)
@@ -69,7 +146,7 @@ panic(char *s)
 
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
-static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
+static unsigned short *crt = (unsigned short*)P2V(0xb8000);  // CGA memory
 
 static void
 cgaputc(int c)
@@ -138,6 +215,35 @@ consoleintr(int (*getc)(void))
 
 	acquire(&cons.lock);
 	while((c = getc()) >= 0){
+
+		if(c == (0x1000 | 'f')){
+			toggle_search();
+			continue;
+		}
+
+		if(search_active_flag){
+			if(c == (0x1000 | 'n')){
+				current_match++;
+				refresh_search();
+			}else if (c == (0x1000 | 'p')){
+				current_match--;
+				refresh_search();
+			}else if (c == BACKSPACE || c == '\x7f' || c == C('H')){ //oba su za backspace, '/x7f' je samo za sigurnost pri radjenju u svom terminalu na archu
+				if(search_len > 0){
+					search_len--;
+					current_match = 0; // vraca korisnika na prvi pronadjeni rezultat
+					crt[24*80 + 8 + search_len] = ' ' | 0x0800; //brise karakter kada se klikne backspace
+					refresh_search();
+				}
+			}else if( c >= 32 && c <= 126 && search_len < (80 - 8)){ //samo tasteri koji su citljivi
+				search_buf[search_len++] = (char)c; //dodaje slobo u search bafer i povecava duzinu trazenog niza
+				crt[24*80 + 8 + (search_len - 1)] = (c & 0xff) | 0x0800; // upisuje normalan karakter
+				current_match = 0;
+				refresh_search();
+			}
+			continue;
+		}
+
 		switch(c){
 		case C('P'):  // Process listing.
 			// procdump() locks cons.lock indirectly; invoke later

@@ -115,4 +115,11 @@ static uchar ctlmap[256] =
 	[0xD2] KEY_INS,   [0xD3] KEY_DEL
 };
 
+
+static uchar altmap[256] = {
+	[0x21] 'f', // ALT+F
+	[0x31] 'n', // ALT+N
+	[0x19] 'p'  // ALT+P
+};
+
 #endif // KERNEL_KBD_H
