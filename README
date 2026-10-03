@@ -1,4 +1,24 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/EFaFaQLe)
+# xv6 VGA Console Text Search
+
+This project modifies the xv6 operating system to add a text search mode directly into the VGA video buffer. The goal is to allow users to quickly find and highlight specific words in the console without using external tools.
+
+## Key Implementations
+
+1. Intercepting keyboard input and blocking the shell while the search mode is active. The mode is toggled using the ALT and F keys.
+2. Full screen and color restoration upon exiting the search mode to ensure the original console state is perfectly preserved.
+3. Real time search over video memory. The system scans the entire VGA buffer as the user types, independent of font size.
+4. Case insensitive matching with dynamic color highlighting. Matches are shown in white text on a purple background.
+5. Circular navigation through results using ALT and N for next, and ALT and P for previous. The currently selected match is highlighted in white text on a green background.
+
+## Technologies
+
+1. C programming language
+2. xv6 kernel
+3. Direct VGA memory buffer manipulation
+4. Keyboard interrupt handling
+
+---
+
 xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
 Version 6 (v6).  xv6 loosely follows the structure and style of v6,
 but is implemented for a modern x86-based multiprocessor using ANSI C.
